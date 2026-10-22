@@ -1,4 +1,5 @@
 export * from "./chars.ts";
+export * from "./confusions.ts";
 export * from "./font.ts";
 export * from "./histogram.ts";
 export * from "./settings.ts";

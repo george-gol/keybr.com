@@ -1,11 +1,13 @@
 import { describe, it, test } from "node:test";
 import { Layout, loadKeyboard } from "@keybr/keyboard";
 import { FakePhoneticModel } from "@keybr/phonetic-model";
+import { LCG } from "@keybr/rand";
 import { makeKeyStatsMap } from "@keybr/result";
 import { Settings } from "@keybr/settings";
-import { deepEqual, equal } from "rich-assert";
+import { ConfusionMap } from "@keybr/textinput";
+import { deepEqual, equal, isTrue } from "rich-assert";
 import { fakeKeyStatsMap, printLessonKeys } from "./fakes.ts";
-import { GuidedLesson } from "./guided.ts";
+import { findConfusedPairs, GuidedLesson } from "./guided.ts";
 import { LessonKey } from "./key.ts";
 import { lessonProps } from "./settings.ts";
 
@@ -242,6 +244,87 @@ test("generate text with natural words", () => {
     lesson.generate(lessonKeys, model.rng),
     "abcaf abcbe abcaa abcaf abcbe abcaa abcaf abcbe abcaa abcaf abcbe abcaa " +
       "abcaf abcbe abcaa abcaf abcbe abcaa abcaf abcbe",
+  );
+});
+
+test("find confused pairs of the included keys", () => {
+  const settings = new Settings();
+  const keyboard = loadKeyboard(Layout.EN_US);
+  const model = new FakePhoneticModel(["uno", "due", "tre"]);
+  const lesson = new GuidedLesson(settings, keyboard, model, []);
+  const lessonKeys = lesson.update(makeKeyStatsMap(lesson.letters, []));
+  const confusions = ConfusionMap.empty.merge([
+    { expected: /* "b" */ 0x0062, actual: /* "d" */ 0x0064, count: 10 },
+    { expected: /* "e" */ 0x0065, actual: /* "c" */ 0x0063, count: 5 },
+    { expected: /* "a" */ 0x0061, actual: /* "f" */ 0x0066, count: 2 }, // Too few.
+    { expected: /* "a" */ 0x0061, actual: /* "z" */ 0x007a, count: 20 }, // Not included.
+  ]);
+
+  deepEqual(findConfusedPairs(lessonKeys, ConfusionMap.empty), []);
+  deepEqual(findConfusedPairs(lessonKeys, confusions), [
+    { a: 0x0062, b: 0x0064, weight: 1 },
+    { a: 0x0065, b: 0x0063, weight: 0.5 },
+  ]);
+});
+
+test("generate more words with confused pairs", () => {
+  const settings = new Settings().set(lessonProps.guided.naturalWords, true);
+  const keyboard = loadKeyboard(Layout.EN_US);
+  const model = new FakePhoneticModel(["uno", "due", "tre"]);
+  const lesson = new GuidedLesson(settings, keyboard, model, [
+    "abd",
+    "abc",
+    "ace",
+    "acf",
+    "aef",
+    "afc",
+  ]);
+  const lessonKeys = lesson.update(makeKeyStatsMap(lesson.letters, []));
+  const confusions = ConfusionMap.empty.merge([
+    { expected: /* "b" */ 0x0062, actual: /* "d" */ 0x0064, count: 10 },
+  ]);
+  const ratio = (confusions: ConfusionMap) => {
+    const rng = LCG(1);
+    let total = 0;
+    let found = 0;
+    for (let i = 0; i < 100; i++) {
+      for (const word of String(
+        lesson.generate(lessonKeys, rng, confusions),
+      ).split(" ")) {
+        total++;
+        if (word === "abd") {
+          found++;
+        }
+      }
+    }
+    return found / total;
+  };
+
+  const baseline = ratio(ConfusionMap.empty);
+  const weighted = ratio(confusions);
+
+  // The confused pairs add weight, but do not replace the other words.
+  isTrue(baseline > 0.05 && baseline < 0.15);
+  isTrue(weighted > baseline * 1.2 && weighted < baseline * 2);
+});
+
+test("ignore confusions below the threshold", () => {
+  const settings = new Settings().set(lessonProps.guided.naturalWords, true);
+  const keyboard = loadKeyboard(Layout.EN_US);
+  const model = new FakePhoneticModel(["uno", "due", "tre"]);
+  const lesson = new GuidedLesson(settings, keyboard, model, [
+    "abd",
+    "abc",
+    "ace",
+  ]);
+  const lessonKeys = lesson.update(makeKeyStatsMap(lesson.letters, []));
+  const confusions = ConfusionMap.empty.merge([
+    { expected: /* "b" */ 0x0062, actual: /* "d" */ 0x0064, count: 2 },
+  ]);
+
+  equal(
+    lesson.generate(lessonKeys, LCG(1), confusions),
+    lesson.generate(lessonKeys, LCG(1)),
   );
 });
 

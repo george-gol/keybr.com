@@ -4,7 +4,7 @@ import { schedule } from "@keybr/lang";
 import { type Lesson } from "@keybr/lesson";
 import { LessonLoader } from "@keybr/lesson-loader";
 import { LoadingProgress } from "@keybr/pages-shared";
-import { type Result, useResults } from "@keybr/result";
+import { ConfusionStore, type Result, useResults } from "@keybr/result";
 import { useSettings } from "@keybr/settings";
 import { useEffect, useMemo, useState } from "react";
 import { Controller } from "./Controller.tsx";
@@ -29,9 +29,10 @@ function ProgressUpdater({ lesson }: { readonly lesson: Lesson }) {
     return (
       <Controller
         progress={progress}
-        onResult={(result) => {
+        onResult={(result, confusions) => {
           if (result.validate()) {
             progress.append(result, displayEvent);
+            progress.appendConfusions(confusions);
             appendResults([result]);
           }
         }}
@@ -45,7 +46,8 @@ function useProgress(lesson: Lesson, results: readonly Result[]) {
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState({ total: 0, current: 0 });
   const progress = useMemo(
-    () => new Progress(settings, lesson),
+    () =>
+      new Progress(settings, lesson, new ConfusionStore(window.localStorage)),
     [settings, lesson],
   );
   useEffect(() => {

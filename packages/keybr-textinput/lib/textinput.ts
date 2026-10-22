@@ -8,6 +8,7 @@ import {
   splitStyledText,
   type StyledText,
 } from "./chars.ts";
+import { type Confusion, toConfusion } from "./confusions.ts";
 import { type TextInputSettings } from "./settings.ts";
 
 export enum Feedback {
@@ -39,6 +40,9 @@ export class TextInput {
   #steps: (Step & { readonly char: Char })[] = [];
   #garbage: (Step & { readonly char: Char })[] = [];
   #typo!: boolean;
+  #confusions: Confusion[] = [];
+  #pendingConfusion: Confusion | null = null;
+  #errorPos = -1;
   #output!: { chars: Char[]; lines: LineList; remaining: Char[] };
 
   constructor(
@@ -60,6 +64,9 @@ export class TextInput {
     this.#steps = [];
     this.#garbage = [];
     this.#typo = false;
+    this.#confusions = [];
+    this.#pendingConfusion = null;
+    this.#errorPos = -1;
     this.#update();
   }
 
@@ -83,6 +90,13 @@ export class TextInput {
     return this.#steps;
   }
 
+  /**
+   * The list of the substitution errors made so far.
+   */
+  get confusions(): readonly Confusion[] {
+    return this.#confusions;
+  }
+
   get chars(): readonly Char[] {
     return this.#output.chars;
   }
@@ -103,10 +117,7 @@ export class TextInput {
   }: {
     readonly timeStamp: number;
     readonly inputType:
-      | "appendChar"
-      | "appendLineBreak"
-      | "clearChar"
-      | "clearWord";
+      "appendChar" | "appendLineBreak" | "clearChar" | "clearWord";
     readonly codePoint: CodePoint;
     readonly timeToType: number;
   }): Feedback {
@@ -133,6 +144,8 @@ export class TextInput {
     while (this.pos > 0 && this.at(this.pos - 1).codePoint !== 0x0020) {
       this.#steps.pop();
     }
+    this.#pendingConfusion = null;
+    this.#errorPos = -1;
     this.#typo = true;
     return this.#return(Feedback.Succeeded);
   }
@@ -147,6 +160,16 @@ export class TextInput {
     }
 
     const { codePoint: expected } = this.at(this.pos);
+
+    if (
+      !this.stopOnError &&
+      this.#garbage.length === 1 &&
+      (expected === codePoint || filterText.normalize(expected) === codePoint)
+    ) {
+      // The expected character typed right after a wrong one
+      // means that the wrong character was inserted, not substituted.
+      this.#pendingConfusion = null;
+    }
 
     if (expected !== 0x0020 && codePoint === 0x0020) {
       if (
@@ -187,6 +210,14 @@ export class TextInput {
     }
 
     this.#typo = true;
+    if (this.#garbage.length === 0 && this.#errorPos !== this.pos) {
+      // Only the first wrong key at the given position is a substitution,
+      // the subsequent ones are the consequences of the first error.
+      this.#errorPos = this.pos;
+      if (!this.#isMisplacedChar(codePoint)) {
+        this.#pendingConfusion = toConfusion(expected, codePoint);
+      }
+    }
     if (!this.stopOnError || this.forgiveErrors) {
       if (this.#garbage.length < garbageBufferLength) {
         this.#garbage.push({
@@ -233,13 +264,27 @@ export class TextInput {
     this.#output = { chars, lines, remaining };
   }
 
+  #isMisplacedChar(codePoint: CodePoint): boolean {
+    // A skipped character, or a repeated previous one.
+    return (
+      (this.pos + 1 < this.length &&
+        this.at(this.pos + 1).codePoint === codePoint) ||
+      (this.pos > 0 && this.at(this.pos - 1).codePoint === codePoint)
+    );
+  }
+
   #addStep(step: Step, char: Char): void {
+    if (step.typo && this.#pendingConfusion != null) {
+      this.#confusions.push(this.#pendingConfusion);
+    }
+    this.#pendingConfusion = null;
     const attrs = step.typo ? Attr.Miss : Attr.Hit;
     this.#steps.push({ ...step, char: { ...char, attrs } });
     this.onStep(step);
   }
 
   #skipWord(timeStamp: number): void {
+    this.#pendingConfusion = null;
     // Skip the remaining non-space characters inside the word.
     while (this.pos < this.length && this.at(this.pos).codePoint !== 0x0020) {
       this.#addStep(
@@ -331,7 +376,8 @@ export class TextInput {
       }
     }
 
-    // Append a step with an error.
+    // Append a step with an error, not a substitution.
+    this.#pendingConfusion = null;
     this.#addStep(
       {
         timeStamp: this.#garbage[0].timeStamp,

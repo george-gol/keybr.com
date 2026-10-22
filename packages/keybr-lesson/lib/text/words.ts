@@ -5,6 +5,7 @@ import {
   type PhoneticModel,
 } from "@keybr/phonetic-model";
 import { randomSample, type RNG, weightedRandomSample } from "@keybr/rand";
+import { type CodePoint, toCodePoints } from "@keybr/unicode";
 
 export type WordGenerator = () => string | "" | null;
 
@@ -49,6 +50,62 @@ export function wordSequence(
       return null;
     }
   };
+}
+
+export type ConfusedPair = {
+  readonly a: CodePoint;
+  readonly b: CodePoint;
+  /** The relative frequency of the confusion in the range (0, 1]. */
+  readonly weight: number;
+};
+
+/**
+ * Prefers the words which contain both keys of the frequently confused pairs.
+ * Picks one of a few candidate words, where each word has the weight
+ * `1 + min(1, sum of the weights of the pairs found in the word)`,
+ * so a word with a confused pair is at most twice as likely to be chosen.
+ */
+export function confusedWords(
+  nextWord: WordGenerator,
+  pairs: readonly ConfusedPair[],
+  random: RNG,
+  candidates = 3,
+): WordGenerator {
+  if (pairs.length === 0) {
+    return nextWord;
+  }
+  return () => {
+    const words: string[] = [];
+    while (words.length < candidates) {
+      const word = nextWord();
+      if (word == null || word === "") {
+        break;
+      }
+      words.push(word);
+    }
+    if (words.length === 0) {
+      return null;
+    }
+    return weightedRandomSample(
+      words,
+      (word) => 1 + Math.min(1, confusionScore(word, pairs)),
+      random,
+    );
+  };
+}
+
+export function confusionScore(
+  word: string,
+  pairs: readonly ConfusedPair[],
+): number {
+  const codePoints = new Set(toCodePoints(word));
+  let score = 0;
+  for (const { a, b, weight } of pairs) {
+    if (codePoints.has(a) && codePoints.has(b)) {
+      score += weight;
+    }
+  }
+  return score;
 }
 
 export function uniqueWords(nextWord: WordGenerator): WordGenerator {

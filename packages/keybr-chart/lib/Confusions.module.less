@@ -1,0 +1,48 @@
+.table {
+  border-collapse: collapse;
+}
+
+.key {
+  font-family: var(--monospace-font-family);
+  text-align: center;
+  padding-inline: 0.5rem;
+}
+
+.arrow {
+  text-align: center;
+}
+
+.barCell {
+  inline-size: 20rem;
+  padding-inline: 0.5rem;
+}
+
+.bar {
+  block-size: 1rem;
+  background-color: var(--Chart-hist-m__color);
+}
+
+.count {
+  font-family: var(--value-font-family);
+  text-align: end;
+}
+
+.cell {
+  position: relative;
+  min-inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border: 1px solid var(--Chart-frame__color);
+  font-family: var(--value-font-family);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.heat {
+  position: absolute;
+  inset: 0;
+  background-color: var(--Chart-hist-m__color);
+}
+
+.cellValue {
+  position: relative;
+}

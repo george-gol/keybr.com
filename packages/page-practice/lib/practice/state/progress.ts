@@ -1,12 +1,15 @@
+import { keyboardProps } from "@keybr/keyboard";
 import { type LoadingEventListener } from "@keybr/lang";
 import { type Lesson, MutableDailyGoal } from "@keybr/lesson";
 import {
+  ConfusionStore,
   MutableKeyStatsMap,
   MutableStreakList,
   MutableSummaryStats,
   type Result,
 } from "@keybr/result";
 import { type Settings } from "@keybr/settings";
+import { type Confusion, type ConfusionMap } from "@keybr/textinput";
 import { DailyGoalEvents } from "./event-source-daily-goal.ts";
 import { LetterEvents } from "./event-source-letter.ts";
 import { TopScoreEvents } from "./event-source-top-score.ts";
@@ -25,8 +28,14 @@ export class Progress {
   readonly #streakList: MutableStreakList;
   readonly #dailyGoal: MutableDailyGoal;
   readonly #events: LessonEventSource;
+  readonly #confusionStore: ConfusionStore;
+  #confusions: ConfusionMap;
 
-  constructor(settings: Settings, lesson: Lesson) {
+  constructor(
+    settings: Settings,
+    lesson: Lesson,
+    confusionStore = new ConfusionStore(null),
+  ) {
     this.#settings = settings;
     this.#lesson = lesson;
     this.#results = [];
@@ -34,6 +43,10 @@ export class Progress {
     this.#summaryStats = new MutableSummaryStats();
     this.#streakList = new MutableStreakList();
     this.#dailyGoal = new MutableDailyGoal(this.#settings);
+    this.#confusionStore = confusionStore;
+    this.#confusions = confusionStore.load(
+      this.#settings.get(keyboardProps.layout),
+    );
 
     const letter = new LetterEvents(this.#lesson, this.#keyStatsMap);
     const topSpeed = new TopSpeedEvents();
@@ -95,6 +108,13 @@ export class Progress {
     this.#events.append(result, listener);
   }
 
+  appendConfusions(confusions: readonly Confusion[]) {
+    this.#confusions = this.#confusionStore.append(
+      this.#settings.get(keyboardProps.layout),
+      confusions,
+    );
+  }
+
   get settings() {
     return this.#settings;
   }
@@ -117,5 +137,9 @@ export class Progress {
 
   get dailyGoal() {
     return this.#dailyGoal;
+  }
+
+  get confusions() {
+    return this.#confusions;
   }
 }

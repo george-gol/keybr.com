@@ -7,6 +7,8 @@ import {
 import { ExplainerBoundary } from "@keybr/widget";
 import { AccuracyStreaksSection } from "./profile/AccuracyStreaksSection.tsx";
 import { CalendarSection } from "./profile/CalendarSection.tsx";
+import { ConfusionMatrixSection } from "./profile/ConfusionMatrixSection.tsx";
+import { ConfusionPairsSection } from "./profile/ConfusionPairsSection.tsx";
 import { DataScript } from "./profile/DataScript.tsx";
 import { ExplainProfile } from "./profile/ExplainProfile.tsx";
 import { FooterSection } from "./profile/FooterSection.tsx";
@@ -63,6 +65,10 @@ function Content({ keyStatsMap }: { keyStatsMap: KeyStatsMap }) {
       <KeyFrequencyHistogramSection keyStatsMap={keyStatsMap} />
 
       <KeyFrequencyHeatmapSection keyStatsMap={keyStatsMap} />
+
+      <ConfusionPairsSection />
+
+      <ConfusionMatrixSection />
 
       <CalendarSection dailyStatsMap={dailyStatsMap} />
 

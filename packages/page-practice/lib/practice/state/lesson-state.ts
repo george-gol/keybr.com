@@ -13,6 +13,7 @@ import {
 } from "@keybr/result";
 import { type Settings } from "@keybr/settings";
 import {
+  type ConfusionMap,
   type Feedback,
   type LineList,
   makeStats,
@@ -39,6 +40,7 @@ export class LessonState {
   readonly streakList: StreakList;
   readonly dailyGoal: DailyGoal;
   readonly lessonKeys: LessonKeys;
+  readonly confusions: ConfusionMap;
 
   lastLesson: LastLesson | null = null;
 
@@ -61,7 +63,10 @@ export class LessonState {
     this.streakList = progress.streakList.copy();
     this.dailyGoal = progress.dailyGoal.copy();
     this.lessonKeys = this.lesson.update(this.keyStatsMap);
-    this.#reset(this.lesson.generate(this.lessonKeys, Lesson.rng));
+    this.confusions = progress.confusions;
+    this.#reset(
+      this.lesson.generate(this.lessonKeys, Lesson.rng, this.confusions),
+    );
   }
 
   resetLesson() {
@@ -69,7 +74,9 @@ export class LessonState {
   }
 
   skipLesson() {
-    this.#reset(this.lesson.generate(this.lessonKeys, Lesson.rng));
+    this.#reset(
+      this.lesson.generate(this.lessonKeys, Lesson.rng, this.confusions),
+    );
   }
 
   onInput(event: IInputEvent): Feedback {

@@ -7,7 +7,7 @@ import { type Letter, PhoneticModel } from "@keybr/phonetic-model";
 import { LCG, type RNGStream } from "@keybr/rand";
 import { type KeyStatsMap, type Result, ResultGroups } from "@keybr/result";
 import { type Settings } from "@keybr/settings";
-import { type StyledText } from "@keybr/textinput";
+import { type ConfusionMap, type StyledText } from "@keybr/textinput";
 import { type LessonKeys } from "./key.ts";
 
 export abstract class Lesson {
@@ -39,5 +39,9 @@ export abstract class Lesson {
 
   abstract update(keyStatsMap: KeyStatsMap): LessonKeys;
 
-  abstract generate(lessonKeys: LessonKeys, rng: RNGStream): StyledText;
+  abstract generate(
+    lessonKeys: LessonKeys,
+    rng: RNGStream,
+    confusions?: ConfusionMap,
+  ): StyledText;
 }

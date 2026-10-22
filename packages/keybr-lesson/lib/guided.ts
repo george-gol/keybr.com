@@ -4,6 +4,7 @@ import { Filter, Letter, type PhoneticModel } from "@keybr/phonetic-model";
 import { type RNGStream } from "@keybr/rand";
 import { type KeyStatsMap } from "@keybr/result";
 import { type Settings } from "@keybr/settings";
+import { ConfusionMap } from "@keybr/textinput";
 import { Dictionary, filterWordList } from "./dictionary.ts";
 import { LessonKey, LessonKeys } from "./key.ts";
 import { Lesson } from "./lesson.ts";
@@ -11,11 +12,18 @@ import { lessonProps } from "./settings.ts";
 import { Target } from "./target.ts";
 import { generateFragment } from "./text/fragment.ts";
 import {
+  type ConfusedPair,
+  confusedWords,
   mangledWords,
   phoneticWords,
   randomWords,
   uniqueWords,
 } from "./text/words.ts";
+
+/** The minimal number of typos to consider a pair of keys confused. */
+const minConfusionCount = 3;
+/** The maximal number of confused pairs to practice. */
+const maxConfusedPairs = 10;
 
 export class GuidedLesson extends Lesson {
   readonly dictionary: Dictionary;
@@ -107,12 +115,20 @@ export class GuidedLesson extends Lesson {
     return lessonKeys;
   }
 
-  override generate(lessonKeys: LessonKeys, rng: RNGStream) {
+  override generate(
+    lessonKeys: LessonKeys,
+    rng: RNGStream,
+    confusions: ConfusionMap = ConfusionMap.empty,
+  ) {
     const filter = new Filter(
       lessonKeys.findIncludedKeys(),
       lessonKeys.findFocusedKey(),
     );
-    const wordGenerator = this.#makeWordGenerator(filter, rng);
+    const wordGenerator = confusedWords(
+      this.#makeWordGenerator(filter, rng),
+      findConfusedPairs(lessonKeys, confusions),
+      rng,
+    );
     const words = mangledWords(
       uniqueWords(wordGenerator),
       this.model.language,
@@ -159,4 +175,34 @@ export class GuidedLesson extends Lesson {
     }
     return pseudoWords;
   }
+}
+
+/**
+ * Finds the most frequently confused pairs of the included keys.
+ */
+export function findConfusedPairs(
+  lessonKeys: LessonKeys,
+  confusions: ConfusionMap,
+): ConfusedPair[] {
+  const included = new Set(
+    lessonKeys.findIncludedKeys().map(({ letter }) => letter.codePoint),
+  );
+  const pairs = confusions
+    .topPairs(confusions.size)
+    .filter(
+      ({ expected, actual, count }) =>
+        count >= minConfusionCount &&
+        included.has(expected) &&
+        included.has(actual),
+    )
+    .slice(0, maxConfusedPairs);
+  if (pairs.length === 0) {
+    return [];
+  }
+  const max = pairs[0].count;
+  return pairs.map(({ expected, actual, count }) => ({
+    a: expected,
+    b: actual,
+    weight: count / max,
+  }));
 }
